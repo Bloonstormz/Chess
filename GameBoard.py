@@ -1,11 +1,5 @@
 from enum import Enum
 
-'''
-TODO:
-- Implement castling
-- Implement checks
-'''
-
 class MoveType(Enum):
     NORMAL = 0
     CASTLING = 1
@@ -46,14 +40,6 @@ class Piece(Enum):
     
     def isColour(piece : int, type : Enum) -> bool:
         return (piece & 0b011000) == (type.value)
-    
-    #depracated
-    def isInitalD(piece : int) -> bool:
-        return piece >> 5
-    
-    #depracated
-    def removeIntialD(piece : int) -> int:
-        return piece & 0b011111
     
     def flipColour(type : Enum) -> Enum:
         return Piece.WHITE if type == Piece.BLACK else Piece.BLACK
@@ -181,10 +167,10 @@ class Board():
                         raise ValueError (f"Invalid FEN String - Castling availability invalid: {FEN}")
         
         if enPassant == "-":
-            enPassant = None
+            enPassant = []
         else:
             try:
-                enPassant = Board.algebraicNotationToRankFile(enPassant)
+                enPassant = [Board.algebraicNotationToRankFile(enPassant)]
             except ValueError:
                 raise ValueError (f"Invalid FEN String - En Passant invalid: {FEN}")
 
@@ -326,7 +312,6 @@ class Board():
                 newPos2 = Board.posChange(newPos, change)
                 if self.getBoardValue(newPos2) == 0 and not self.curKingThreat(Move(position, newPos2, 0)): #Empty Cell 2 spaces
                     moveList.add(Move(position, newPos2, 0))
-                    self.enPassant = newPos
         
         #Captures
         for change in offset[startIndex+1], offset[startIndex+2]:
@@ -347,7 +332,7 @@ class Board():
                         moveList.add(Move(position, newPos, self.getBoardValue(newPos)))
                 
             #En passant
-            if self.getBoardValue(newPos) == 0 and newPos == self.enPassant and not self.curKingThreat(Move(position, newPos, self.getBoardValue(newPos), MoveType.ENPASSANT)):
+            if self.getBoardValue(newPos) == 0 and newPos == self.enPassant[-1] and not self.curKingThreat(Move(position, newPos, self.getBoardValue(newPos), MoveType.ENPASSANT)):
                 moveList.add(Move(position, newPos, self.getBoardValue(newPos), MoveType.ENPASSANT))
 
 
@@ -413,7 +398,7 @@ class Board():
                     break
 
                 if Piece.isColour(newPosPiece, Piece.flipColour(allyColour)):
-                    if Piece.isType(newPosPiece, Piece.QUEEN) or Piece.isType(newPosPiece, (Piece.BISHOP if x <= 3 else Piece.KNIGHT)) or (Piece.isType(newPosPiece, Piece.KING) and multiplier == 1):
+                    if Piece.isType(newPosPiece, Piece.QUEEN) or Piece.isType(newPosPiece, (Piece.BISHOP if x <= 3 else Piece.ROOK)) or (Piece.isType(newPosPiece, Piece.KING) and multiplier == 1):
                         if move:
                             self.unmakeMove(move)
                         return True
@@ -451,8 +436,6 @@ class Board():
             self.gameState = 2 if self.colourToMove == Piece.BLACK else 3
         else:
             self.gameState = 1
-
-
     
     def __makeMove(self, move : Move):
         originalPos = move.getOriginal()
@@ -499,6 +482,14 @@ class Board():
                         self.bQRookMoved = True
                         self.bKingCastle = False
 
+        #Adding / removing en passant square
+        if movingPiece == Piece.WHITE.value + Piece.PAWN.value and target[0] == 3: 
+            self.enPassant.append(Board.posChange(move.getTarget(), (-1,0)))
+        elif movingPiece == Piece.BLACK.value + Piece.PAWN.value and target[0] == 4:
+            self.enPassant.append(Board.posChange(move.getTarget(), (1,0)))
+        else:
+            self.enPassant.append((-1,-1)) #Invalid enPassant tile
+            
         #Setting board values when castling
         if move.type == MoveType.CASTLING:
             currentColourPieces[Piece.KING].remove(originalPos)
@@ -533,11 +524,7 @@ class Board():
 
         #If there is a captured piece, remove it from known piece list
         if capturedPiece := move.getTargetValue():
-            try:
-                oppositeColourPieces[Piece.typeFromtInt(capturedPiece)].remove(target)
-            except Exception:
-                print(move)
-                raise Exception
+            oppositeColourPieces[Piece.typeFromtInt(capturedPiece)].remove(target)
             
         self.setBoardValue(movingPiece, target)
         self.setBoardValue(0, originalPos)
@@ -558,40 +545,43 @@ class Board():
             match Piece.pieceType(movingPiece):
                 case Piece.KING.value:
                     if self.colourToMove == Piece.WHITE:
-                        self.bKingMoved = False
-                        if not self.bKRookMoved:
-                            self.bKingCastle = True
-                        if not self.bQRookMoved:
-                            self.bQueenCastle = True
-                    else:
                         self.wKingMoved = False
                         if not self.wKRookMoved:
                             self.wKingCastle = True
                         if not self.wQRookMoved:
                             self.wQueenCastle = True
+                    else:
+                        self.bKingMoved = False
+                        if not self.bKRookMoved:
+                            self.bKingCastle = True
+                        if not self.bQRookMoved:
+                            self.bQueenCastle = True
                 case Piece.ROOK.value:
                     if originalPos[1] == 0: #Queen side rook
                         if self.colourToMove == Piece.WHITE:
-                            self.bQRookMoved = False
-                            if not self.bKingMoved:
-                                self.bQueenCastle = True
-                        else:
                             self.wQRookMoved = False
                             if not self.wKingMoved:
                                 self.wQueenCastle = True
+                        else:
+                            self.bQRookMoved = False
+                            if not self.bKingMoved:
+                                self.bQueenCastle = True
 
                     elif originalPos[1] == 7: #King side rook
                         if self.colourToMove == Piece.WHITE:
-                            self.bKRookMoved = False
-                            if not self.bKingMoved:
-                                self.bKingCastle = True
-                        else:
                             self.wKRookMoved = False
                             if not self.wKingMoved:
                                 self.wKingCastle = True
+                        else:
+                            self.bKRookMoved = False
+                            if not self.bKingMoved:
+                                self.bKingCastle = True
 
                 case _:
                     raise ValueError("Only rooks/kings will have initial move")
+
+        #Reinstating / removing en passant square
+        self.enPassant.pop()
 
         if move.type == MoveType.PROMOTION:
             currentColourPieces[move.promotion].remove(target)
@@ -672,11 +662,8 @@ class Board():
 
 if __name__=="__main__":
     # "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1"
-    game = Board("rnb1k1nr/pppp1ppp/5q2/2b1p3/1P2P3/P7/2PP2PP/RNBQKBNR b KQkq - 0 1")
-    game.confirmMove(Move((5,5), (1,5), 0))
-    pos = Board.algebraicNotationToRankFile("e1")
-    print(pos)
-    print(Piece.typeFromtInt(game.getBoardValue(pos)))
+    game = Board()
+    pos = Board.algebraicNotationToRankFile("e2")
     temp = game.moveGenerator(game.getBoardValue(pos), pos)
     counter = 1
     if temp:

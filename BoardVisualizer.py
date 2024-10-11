@@ -310,5 +310,5 @@ class BoardVisualizer(GameBoard.Board):
 
 if __name__ == "__main__":
     # "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1"
-    game = BoardVisualizer("rnb1k1nr/pppp1ppp/5q2/2b1p3/1P2P3/P7/2PP1PPP/RNB1KBNR b KQkq e3 0 1")
+    game = BoardVisualizer()
     game.run()
